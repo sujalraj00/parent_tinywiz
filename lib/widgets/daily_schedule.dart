@@ -12,7 +12,7 @@ Widget buildDailySchedule() {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.deepPurple[800],
+            color: Colors.white,
           ),
         ),
       ),

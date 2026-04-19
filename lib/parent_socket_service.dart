@@ -62,6 +62,7 @@
 // }
 
 import 'package:parent_tinywiz/socket_service_base.dart';
+import 'package:parent_tinywiz/constants.dart';
 
 class ParentSocketService extends SocketServiceBase {
   String? _parentId;
@@ -72,6 +73,7 @@ class ParentSocketService extends SocketServiceBase {
   Function(Map<String, dynamic>)? onChildStatusUpdate;
   Function(Map<String, dynamic>)? onLockAcknowledged;
   Function(String)? onLockError;
+  Function(Map<String, dynamic>)? onChildUsageStats;
 
   static final ParentSocketService _instance = ParentSocketService._internal();
   factory ParentSocketService() => _instance;
@@ -87,7 +89,7 @@ class ParentSocketService extends SocketServiceBase {
     print('═══════════════════════════════════════════════════════');
     print('👤 Parent ID: $parentId');
     print('👶 Child ID: $childId');
-    print('🌐 Server URL: ${serverUrl ?? 'default (192.168.1.13:3200)'}');
+    print('🌐 Server URL: ${serverUrl ?? 'default (${AppConstants.serverUrl})'}');
     print('⏰ Timestamp: ${DateTime.now().toIso8601String()}');
     print('───────────────────────────────────────────────────────');
 
@@ -219,6 +221,20 @@ class ParentSocketService extends SocketServiceBase {
       print('💡 Show dialog to parent asking if they want to unlock');
       print('───────────────────────────────────────────────────────');
       // Show dialog to parent asking if they want to unlock
+    });
+
+    // Listen for child usage stats
+    on('child_usage_stats', (data) {
+      print('═══════════════════════════════════════════════════════');
+      print('📊 CHILD USAGE STATS RECEIVED');
+      print('═══════════════════════════════════════════════════════');
+      print('👶 Child ID: $_childId');
+      print('📦 Usage Stats Data: $data');
+      print('⏰ Timestamp: ${DateTime.now().toIso8601String()}');
+      print('───────────────────────────────────────────────────────');
+      if (data is Map<String, dynamic>) {
+        onChildUsageStats?.call(data);
+      }
     });
 
     print('✅ All event listeners registered');

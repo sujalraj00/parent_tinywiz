@@ -44,7 +44,7 @@ Widget buildChildStatusCard() {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple[800],
+                    color: Colors.white,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -54,7 +54,7 @@ Widget buildChildStatusCard() {
                       width: 10,
                       height: 10,
                       decoration: BoxDecoration(
-                        color: Colors.deepPurple,
+                        color: Colors.deepPurple[400],
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -63,7 +63,7 @@ Widget buildChildStatusCard() {
                       'Learning - Story Time',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.deepPurple[600],
+                        color: Colors.grey[300],
                       ),
                     ),
                   ],

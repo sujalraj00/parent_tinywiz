@@ -1,5 +1,6 @@
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:io';
+import 'package:parent_tinywiz/constants.dart';
 
 class SocketServiceBase {
   IO.Socket? _socket;
@@ -16,7 +17,7 @@ class SocketServiceBase {
     try {
       // Use provided URL or default to your local network IP
       final String url =
-          serverUrl ?? 'http://192.168.1.13:3200'; // ← UPDATE THIS
+          serverUrl ?? AppConstants.serverUrl; // ← UPDATE THIS
 
       _currentServerUrl = url;
       _currentDeviceId = deviceId;

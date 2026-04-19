@@ -20,7 +20,7 @@ Widget buildScheduleItem({
           time,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: Colors.deepPurple[700],
+            color: Colors.white,
             fontSize: 16,
           ),
         ),
@@ -28,7 +28,7 @@ Widget buildScheduleItem({
         Expanded(
           child: Text(
             activity,
-            style: TextStyle(fontSize: 16, color: Colors.deepPurple[900]),
+            style: TextStyle(fontSize: 16, color: Colors.grey[300]),
           ),
         ),
         Text(
