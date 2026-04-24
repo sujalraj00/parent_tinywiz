@@ -2,13 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:parent_tinywiz/parent_socket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart';
 
-// Static cache to persist data across widget recreations
 class _AnalyticsDataCache {
   static Map<String, dynamic>? _cachedData;
-
   static Map<String, dynamic>? get data => _cachedData;
-
   static void setData(Map<String, dynamic> data) {
     _cachedData = data;
   }
@@ -24,177 +22,94 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final ParentSocketService _socketService = ParentSocketService();
   Map<String, dynamic>? _usageStats;
-  bool _isLoading = true; // Only true initially when no data
-  bool _isRefreshing = false; // For manual refresh button
+  bool _isLoading = true;
+  bool _isRefreshing = false;
   bool _hasData = false;
-  SharedPreferences? _prefs; // Cache SharedPreferences instance
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
     super.initState();
-    // First check static cache (fastest)
     if (_AnalyticsDataCache.data != null) {
-      print('📊 Analytics: Loading from static cache');
       setState(() {
         _usageStats = _AnalyticsDataCache.data;
         _isLoading = false;
         _hasData = true;
       });
     }
-    // Then try to load from SharedPreferences
     _loadSavedData();
     _setupSocketListener();
   }
 
   Future<void> _loadSavedData() async {
     try {
-      // Try to get SharedPreferences with retry
-      _prefs = await _getSharedPreferences();
+      await Future.delayed(const Duration(milliseconds: 100));
+      _prefs = await SharedPreferences.getInstance();
 
       if (_prefs != null) {
         final savedDataJson = _prefs!.getString('usage_stats_data');
-
         if (savedDataJson != null && savedDataJson.isNotEmpty) {
           try {
             final savedData = jsonDecode(savedDataJson) as Map<String, dynamic>;
-            print(
-              '📊 Analytics: Loaded saved usage stats data from SharedPreferences',
-            );
-
-            // Also update static cache
             _AnalyticsDataCache.setData(savedData);
-
             if (mounted) {
               setState(() {
                 _usageStats = savedData;
-                _isLoading = false; // Don't show loading, we have saved data
+                _isLoading = false;
                 _hasData = true;
               });
             }
             return;
-          } catch (e) {
-            print('❌ Error parsing saved data: $e');
-          }
+          } catch (_) {}
         }
       }
-
-      print('📊 Analytics: No saved data found');
-      if (mounted) {
-        setState(() {
-          _isLoading = false; // Show "no data" message instead of loading
-        });
-      }
-    } catch (e) {
-      print('❌ Error loading saved data: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false; // Stop loading on error
-        });
-      }
-    }
-  }
-
-  Future<SharedPreferences?> _getSharedPreferences() async {
-    try {
-      // Try with a small delay to ensure platform channels are ready
-      await Future.delayed(const Duration(milliseconds: 100));
-      return await SharedPreferences.getInstance();
-    } catch (e) {
-      print('⚠️ SharedPreferences not available: $e');
-      // Return null if SharedPreferences fails - we'll use in-memory only
-      return null;
+      if (mounted) setState(() => _isLoading = false);
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveData(Map<String, dynamic> data) async {
     try {
-      // Ensure we have SharedPreferences instance
-      if (_prefs == null) {
-        _prefs = await _getSharedPreferences();
-      }
-
+      _prefs ??= await SharedPreferences.getInstance();
       if (_prefs != null) {
-        final dataJson = jsonEncode(data);
-        final success = await _prefs!.setString('usage_stats_data', dataJson);
-        if (success) {
-          print('💾 Analytics: Saved usage stats data locally');
-        } else {
-          print('⚠️ Analytics: Failed to save data (setString returned false)');
-        }
-      } else {
-        print(
-          '⚠️ Analytics: SharedPreferences not available, data saved in memory only',
-        );
-        // Data is already in _usageStats, so it's in memory
-        // This will persist until app restart or widget disposal
+        await _prefs!.setString('usage_stats_data', jsonEncode(data));
       }
-    } catch (e) {
-      print('❌ Error saving data: $e');
-      print('   Data will remain in memory until app restart');
-      // Data is still in _usageStats, so it's available in memory
-    }
+    } catch (_) {}
   }
 
   void _setupSocketListener() {
     _socketService.onChildUsageStats = (data) {
       if (!mounted) return;
-
       try {
-        print('📊 Analytics: Received usage stats data');
-        print('   Data type: ${data.runtimeType}');
-
-        // Extract the actual usage stats from the nested structure
-        // Data structure: {childId: ..., usageStats: [{summary: ..., apps: ...}]}
         Map<String, dynamic>? extractedStats;
-
         final dataMap = data as Map?;
         if (dataMap != null) {
-          print('   Data keys: ${dataMap.keys.toList()}');
           final usageStatsArray = dataMap['usageStats'];
           if (usageStatsArray is List && usageStatsArray.isNotEmpty) {
-            // Get the first element from the usageStats array
             final firstElement = usageStatsArray[0];
-            if (firstElement is Map) {
-              extractedStats = Map<String, dynamic>.from(firstElement);
-              print('   ✅ Extracted stats from usageStats array');
-            }
-          } else if (dataMap.containsKey('summary') &&
-              dataMap.containsKey('apps')) {
-            // Direct structure (fallback)
+            if (firstElement is Map) extractedStats = Map<String, dynamic>.from(firstElement);
+          } else if (dataMap.containsKey('summary') && dataMap.containsKey('apps')) {
             extractedStats = Map<String, dynamic>.from(dataMap);
-            print('   ✅ Using direct structure');
           }
         }
 
         if (extractedStats != null) {
-          print('   ✅ Setting usage stats with summary and apps');
-
-          // Save to static cache first (immediate, always works)
           _AnalyticsDataCache.setData(extractedStats);
-
-          // Try to save to SharedPreferences (may fail, but cache will work)
           _saveData(extractedStats);
-
           setState(() {
             _usageStats = extractedStats;
-            _isLoading = false; // Stop initial loading
-            _isRefreshing = false; // Stop refresh indicator
+            _isLoading = false;
+            _isRefreshing = false;
             _hasData = true;
           });
-        } else {
-          print('   ❌ Could not extract usage stats from data structure');
         }
-      } catch (e, stackTrace) {
-        // Widget might be disposed, ignore
-        print('❌ Error updating analytics state: $e');
-        print('   Stack trace: $stackTrace');
-      }
+      } catch (_) {}
     };
   }
 
   @override
   void dispose() {
-    // Clear the callback to prevent memory leaks
     _socketService.onChildUsageStats = null;
     super.dispose();
   }
@@ -204,14 +119,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '${hours}h ${minutes}m ${seconds}s';
-    } else if (minutes > 0) {
-      return '${minutes}m ${seconds}s';
-    } else {
-      return '${seconds}s';
-    }
+    if (hours > 0) return '${hours}h ${minutes}m ${seconds}s';
+    if (minutes > 0) return '${minutes}m ${seconds}s';
+    return '${seconds}s';
   }
 
   String _formatTime(int milliseconds) {
@@ -219,107 +129,42 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '${hours}h ${minutes}m';
-    } else if (minutes > 0) {
-      return '${minutes}m';
-    } else {
-      return '${seconds}s';
-    }
+    if (hours > 0) return '${hours}h ${minutes}m';
+    if (minutes > 0) return '${minutes}m';
+    return '${seconds}s';
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      appBar: AppBar(
-        title: const Text('Usage Analytics'),
-        actions: [
-          if (_hasData)
-            IconButton(
-              icon: _isRefreshing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(Icons.refresh),
-              onPressed: _isRefreshing
-                  ? null
-                  : () {
-                      // Manual refresh - just show loading on button
-                      // Data will update automatically when new websocket data arrives
-                      setState(() {
-                        _isRefreshing = true;
-                      });
-                      // Reset after a short delay (websocket will update data)
-                      Future.delayed(const Duration(seconds: 2), () {
-                        if (mounted) {
-                          setState(() {
-                            _isRefreshing = false;
-                          });
-                        }
-                      });
-                    },
-              tooltip: 'Refresh',
+  Widget _buildShimmerLoading() {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFF252530),
+      highlightColor: const Color(0xFF353540),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(height: 24, width: 120, color: Colors.white, margin: const EdgeInsets.only(bottom: 16)),
+          Row(
+            children: [
+              Expanded(child: Container(height: 100, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)))),
+              const SizedBox(width: 12),
+              Expanded(child: Container(height: 100, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)))),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(height: 100, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+          const SizedBox(height: 32),
+          Container(height: 24, width: 150, color: Colors.white, margin: const EdgeInsets.only(bottom: 16)),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 4,
+            itemBuilder: (_, __) => Container(
+              height: 80,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             ),
+          )
         ],
       ),
-      body: _isLoading && !_hasData && _usageStats == null
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Waiting for usage data...',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            )
-          : _usageStats == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.bar_chart_outlined,
-                    size: 64,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No usage data available',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 18),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Usage stats will appear here when received',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                  ),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Summary Section
-                  _buildSummarySection(),
-                  const SizedBox(height: 24),
-                  // Apps List Section
-                  _buildAppsSection(),
-                ],
-              ),
-            ),
     );
   }
 
@@ -330,37 +175,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final totalApps = summary['totalApps'] as int? ?? 0;
     final totalUsageTime = summary['totalUsageTime'] as int? ?? 0;
     final socialMediaApps = summary['socialMediaApps'] as int? ?? 0;
-    final timestamp = summary['timestamp'] as String?;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Summary',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
               child: _buildSummaryCard(
                 'Total Apps',
                 totalApps.toString(),
-                Icons.apps,
-                Colors.blue,
+                Icons.grid_view_rounded,
+                const Color(0xFF6C63FF),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildSummaryCard(
-                'Total Usage',
+                'Total Time',
                 _formatTime(totalUsageTime),
-                Icons.access_time,
-                Colors.purple,
+                Icons.access_time_rounded,
+                Colors.purpleAccent,
               ),
             ),
           ],
@@ -369,49 +209,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         _buildSummaryCard(
           'Social Media Apps',
           socialMediaApps.toString(),
-          Icons.people,
-          Colors.orange,
+          Icons.people_alt_rounded,
+          Colors.orangeAccent,
           fullWidth: true,
         ),
-        if (timestamp != null) ...[
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.schedule, size: 16, color: Colors.grey[400]),
-                const SizedBox(width: 8),
-                Text(
-                  'Last updated: ${_formatTimestamp(timestamp)}',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ],
       ],
     );
   }
 
-  Widget _buildSummaryCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color, {
-    bool fullWidth = false,
-  }) {
+  Widget _buildSummaryCard(String title, String value, IconData icon, Color color, {bool fullWidth = false}) {
     return Container(
       width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
+        color: const Color(0xFF1C1C24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,30 +235,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                ),
+                child: Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 14, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
           ),
         ],
       ),
@@ -451,11 +260,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   Widget _buildAppsSection() {
     final apps = _usageStats!['apps'] as List<dynamic>?;
-    if (apps == null || apps.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (apps == null || apps.isEmpty) return const SizedBox.shrink();
 
-    // Sort apps by usage time (descending)
     final sortedApps = List<Map<String, dynamic>>.from(apps)
       ..sort((a, b) {
         final timeA = a['totalTimeInForeground'] as int? ?? 0;
@@ -467,22 +273,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'App Usage',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          'Detailed Usage',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: sortedApps.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            return _buildAppCard(sortedApps[index]);
-          },
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) => _buildAppCard(sortedApps[index]),
         ),
       ],
     );
@@ -492,20 +292,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final appName = app['appName'] as String? ?? 'Unknown App';
     final packageName = app['packageName'] as String? ?? '';
     final totalTime = app['totalTimeInForeground'] as int? ?? 0;
-    final formattedTime =
-        app['formattedTime'] as String? ?? _formatDuration(totalTime);
+    final formattedTime = app['formattedTime'] as String? ?? _formatDuration(totalTime);
     final usagePercentage = (app['usagePercentage'] as num?)?.toDouble() ?? 0.0;
     final isSocialMedia = app['isSocialMedia'] as bool? ?? false;
-    final lastTimeUsed = app['lastTimeUsed'] as int?;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: isSocialMedia
-            ? Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1)
-            : null,
+        color: const Color(0xFF1C1C24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isSocialMedia ? Colors.orangeAccent.withOpacity(0.3) : Colors.white.withOpacity(0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,185 +311,138 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: isSocialMedia
-                      ? Colors.orange.withValues(alpha: 0.2)
-                      : Colors.blue.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  color: isSocialMedia ? Colors.orangeAccent.withOpacity(0.15) : const Color(0xFF6C63FF).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  isSocialMedia ? Icons.people : Icons.apps,
-                  color: isSocialMedia ? Colors.orange : Colors.blue,
+                  isSocialMedia ? Icons.chat_bubble_rounded : Icons.app_shortcut_rounded,
+                  color: isSocialMedia ? Colors.orangeAccent : const Color(0xFF6C63FF),
                   size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            appName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isSocialMedia)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'Social',
-                              style: TextStyle(
-                                color: Colors.orange,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
+                    Text(
+                      appName,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       packageName,
-                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Usage time and percentage
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Usage Time',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formattedTime,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'Percentage',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                    formattedTime,
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${usagePercentage.toStringAsFixed(1)}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Progress bar
+          const SizedBox(height: 16),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
               value: usagePercentage / 100,
-              minHeight: 6,
-              backgroundColor: Colors.grey[800],
+              minHeight: 8,
+              backgroundColor: const Color(0xFF252530),
               valueColor: AlwaysStoppedAnimation<Color>(
-                isSocialMedia ? Colors.orange : Colors.blue,
+                isSocialMedia ? Colors.orangeAccent : const Color(0xFF6C63FF),
               ),
             ),
           ),
-          if (lastTimeUsed != null) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.schedule, size: 14, color: Colors.grey[500]),
-                const SizedBox(width: 4),
-                Text(
-                  'Last used: ${_formatLastUsed(lastTimeUsed)}',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
 
-  String _formatTimestamp(String isoString) {
-    try {
-      final dateTime = DateTime.parse(isoString);
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-
-      if (difference.inMinutes < 1) {
-        return 'Just now';
-      } else if (difference.inMinutes < 60) {
-        return '${difference.inMinutes}m ago';
-      } else if (difference.inHours < 24) {
-        return '${difference.inHours}h ago';
-      } else {
-        return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-      }
-    } catch (e) {
-      return isoString;
-    }
-  }
-
-  String _formatLastUsed(int milliseconds) {
-    try {
-      final dateTime = DateTime.fromMillisecondsSinceEpoch(milliseconds);
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-
-      if (difference.inMinutes < 1) {
-        return 'Just now';
-      } else if (difference.inMinutes < 60) {
-        return '${difference.inMinutes}m ago';
-      } else if (difference.inHours < 24) {
-        return '${difference.inHours}h ago';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays}d ago';
-      } else {
-        return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-      }
-    } catch (e) {
-      return 'Unknown';
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0F13),
+      appBar: AppBar(
+        title: const Text('Analytics'),
+        actions: [
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C63FF))),
+                  )
+                : const Icon(Icons.refresh_rounded),
+            onPressed: _isRefreshing
+                ? null
+                : () {
+                    setState(() => _isRefreshing = true);
+                    Future.delayed(const Duration(seconds: 2), () {
+                      if (mounted) setState(() => _isRefreshing = false);
+                    });
+                  },
+          ),
+        ],
+      ),
+      body: _isLoading && !_hasData
+          ? Padding(
+              padding: const EdgeInsets.all(20),
+              child: _buildShimmerLoading(),
+            )
+          : _usageStats == null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(color: const Color(0xFF1C1C24), shape: BoxShape.circle),
+                        child: Icon(Icons.analytics_rounded, size: 64, color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'No Data Available',
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'We\'re waiting for usage stats to sync.',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSummarySection(),
+                      const SizedBox(height: 32),
+                      _buildAppsSection(),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                ),
+    );
   }
 }

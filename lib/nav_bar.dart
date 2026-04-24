@@ -3,8 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:parent_tinywiz/screens/analytics_screen.dart';
 import 'package:parent_tinywiz/screens/setting_screen.dart';
 import 'package:parent_tinywiz/screens/home_screen.dart';
-import 'package:parent_tinywiz/host_question/presentation/screens/host_question_screen.dart';
-import 'package:parent_tinywiz/host_question/logic/host_question_cubit.dart';
+import 'package:parent_tinywiz/screens/setup_screen.dart';
 
 class NavBar extends StatefulWidget {
   const NavBar({super.key});
@@ -19,10 +18,7 @@ class _NavBarState extends State<NavBar> {
   late final List<Widget> pages = [
     ParentDashboard(),
     const AnalyticsScreen(),
-    BlocProvider(
-      create: (context) => HostQuestionCubit(),
-      child: HostQuestionScreen(),
-    ),
+    const SetupScreen(),
     const SettingScreen(),
   ];
 
