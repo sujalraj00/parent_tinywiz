@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'personal_info_screen.dart';
+import 'screen_time_screen.dart';
 
 class SettingScreen extends StatelessWidget {
   const SettingScreen({super.key});
@@ -32,7 +34,12 @@ class SettingScreen extends StatelessWidget {
                 _SettingsItem(
                   icon: Icons.person_outline_rounded,
                   title: 'Personal Information',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const PersonalInfoScreen()),
+                    );
+                  },
                 ),
                 _SettingsItem(
                   icon: Icons.security_rounded,
@@ -59,7 +66,12 @@ class SettingScreen extends StatelessWidget {
                 _SettingsItem(
                   icon: Icons.schedule_rounded,
                   title: 'Screen Time Limits',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ScreenTimeScreen()),
+                    );
+                  },
                 ),
                 _SettingsItem(
                   icon: Icons.app_blocking_outlined,
