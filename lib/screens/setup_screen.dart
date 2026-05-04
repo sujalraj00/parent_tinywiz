@@ -27,6 +27,7 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _isLoading = false;
   bool _showSuccessOverlay = false;
   String _statusMessage = "";
+  String _loadingMessage = "";
 
   @override
   void initState() {
@@ -100,21 +101,37 @@ class _SetupScreenState extends State<SetupScreen> {
       setState(() {
         _isRecording = false;
         _isLoading = true;
-        _statusMessage = "Processing Voice...";
+        _loadingMessage = "Uploading audio to server...";
       });
 
       if (path != null) {
-        // Simulate upload
+        // Simulate upload and processing time
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          setState(() {
+            _loadingMessage = "Processing and training voice model...";
+          });
+        }
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) {
+          setState(() {
+            _loadingMessage = "Finalizing configuration...";
+          });
+        }
+        await Future.delayed(const Duration(seconds: 1));
+
         final response = await _mockService.sendVoiceCommand(path);
-        _showOverlayMessage(response);
+        _showOverlayMessage("Model successfully trained on the server!");
       }
     } catch (e) {
-      _showOverlayMessage('Failed to send voice command.', isError: true);
+      _showOverlayMessage('Failed to process voice.', isError: true);
     } finally {
-      setState(() {
-        _isLoading = false;
-        _recordedFilePath = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _recordedFilePath = null;
+        });
+      }
     }
   }
 
@@ -134,19 +151,36 @@ class _SetupScreenState extends State<SetupScreen> {
 
     setState(() {
       _isLoading = true;
-      _statusMessage = "Processing Command...";
+      _loadingMessage = "Uploading data to server...";
     });
 
     try {
+      // Simulate upload and processing time
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _loadingMessage = "Processing and training voice model...";
+        });
+      }
+      await Future.delayed(const Duration(seconds: 3));
+      if (mounted) {
+        setState(() {
+          _loadingMessage = "Finalizing configuration...";
+        });
+      }
+      await Future.delayed(const Duration(seconds: 1));
+
       final response = await _mockService.sendTextCommand(text);
       _textController.clear();
-      _showOverlayMessage(response);
+      _showOverlayMessage("Model successfully trained on the server!");
     } catch (e) {
-      _showOverlayMessage('Failed to send text command.', isError: true);
+      _showOverlayMessage('Failed to process data.', isError: true);
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -404,11 +438,11 @@ class _SetupScreenState extends State<SetupScreen> {
                                 ),
                               ),
                               child: _isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                                  ? Text(
+                                      'Processing...',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
                                         color: Colors.white,
                                       ),
                                     )
@@ -433,6 +467,69 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
           ),
         ),
+
+        // Loading Overlay
+        if (_isLoading)
+          Positioned.fill(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 300),
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: child,
+                );
+              },
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  color: Colors.black.withOpacity(0.5),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(32),
+                      margin: const EdgeInsets.symmetric(horizontal: 40),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C24).withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Color(0xFF6C63FF),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            _loadingMessage,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
 
         // Success / Status Overlay
         if (_showSuccessOverlay)

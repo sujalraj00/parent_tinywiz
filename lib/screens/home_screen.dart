@@ -40,6 +40,13 @@ class _ParentDashboardState extends State<ParentDashboard> {
     _socketService.onChildStatusUpdate = (Map<String, dynamic> status) {
       setState(() {
         _childStatus = status;
+        // Sync lock state from child status updates (e.g. child self-unlocked via PIN)
+        final childStatusStr = status['status']?.toString().toLowerCase() ?? '';
+        if (childStatusStr == 'locked') {
+          _isChildLocked = true;
+        } else if (childStatusStr == 'active' || childStatusStr == 'online') {
+          _isChildLocked = false;
+        }
       });
     };
 

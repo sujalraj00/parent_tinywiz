@@ -61,6 +61,8 @@
 //   bool get isConnected => _socket?.connected ?? false;
 // }
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:parent_tinywiz/socket_service_base.dart';
 import 'package:parent_tinywiz/constants.dart';
 
@@ -135,6 +137,9 @@ class ParentSocketService extends SocketServiceBase {
       print('📦 Registration Data: $data');
       print('⏰ Timestamp: ${DateTime.now().toIso8601String()}');
       print('───────────────────────────────────────────────────────');
+
+      // Fetch current lock state from REST API to sync UI after (re)connect
+      _fetchCurrentLockState();
     });
 
     // Listen for lock command confirmation from server
@@ -238,6 +243,30 @@ class ParentSocketService extends SocketServiceBase {
     });
 
     print('✅ All event listeners registered');
+  }
+
+  /// Fetches the current lock state from the server REST API and updates
+  /// [onLockStatusChanged] so the parent UI is always in sync after a
+  /// (re)connect, even if the child self-unlocked while the parent was offline.
+  Future<void> _fetchCurrentLockState() async {
+    if (_childId == null) return;
+    final url = Uri.parse(
+      '${AppConstants.serverUrl}/api/device/$_childId/status',
+    );
+    print('🌐 Fetching current lock state from: $url');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final bool isLocked = body['isLocked'] ?? false;
+        print('🔒 REST status → isLocked: $isLocked');
+        onLockStatusChanged?.call(isLocked);
+      } else {
+        print('⚠️ Status fetch returned ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ Failed to fetch lock status: $e');
+    }
   }
 
   void lockChildPhone(bool lock) {
