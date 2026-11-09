@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:parent_tinywiz/parent_socket_service.dart';
+import 'package:parent_tinywiz/screens/analytics_screen.dart';
 import 'package:parent_tinywiz/widgets/daily_schedule.dart';
 import 'package:parent_tinywiz/widgets/key_metric.dart';
 import 'package:parent_tinywiz/constants.dart';
@@ -22,7 +23,7 @@ class _ParentDashboardState extends State<ParentDashboard> {
     const parentId = 'parent123';
     const childId = 'child456';
     const serverUrl = AppConstants.serverUrl;
-    
+
     _socketService
         .connectAsParent(parentId, childId, serverUrl: serverUrl)
         .then((connected) {
@@ -53,7 +54,9 @@ class _ParentDashboardState extends State<ParentDashboard> {
     _socketService.onLockAcknowledged = (Map<String, dynamic> data) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Child ${data['locked'] ? 'locked' : 'unlocked'} successfully'),
+          content: Text(
+            'Child ${data['locked'] ? 'locked' : 'unlocked'} successfully',
+          ),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
         ),
@@ -128,7 +131,11 @@ class _ParentDashboardState extends State<ParentDashboard> {
               CircleAvatar(
                 radius: 26,
                 backgroundColor: const Color(0xFF6C63FF).withOpacity(0.2),
-                child: const Icon(Icons.person, size: 28, color: Color(0xFF6C63FF)),
+                child: const Icon(
+                  Icons.person,
+                  size: 28,
+                  color: Color(0xFF6C63FF),
+                ),
               ),
               Positioned(
                 bottom: 0,
@@ -139,7 +146,10 @@ class _ParentDashboardState extends State<ParentDashboard> {
                   decoration: BoxDecoration(
                     color: _isConnected ? Colors.greenAccent : Colors.redAccent,
                     shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF121212), width: 2),
+                    border: Border.all(
+                      color: const Color(0xFF121212),
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -156,10 +166,7 @@ class _ParentDashboardState extends State<ParentDashboard> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            const Color(0xFF1C1C24),
-            const Color(0xFF252530),
-          ],
+          colors: [const Color(0xFF1C1C24), const Color(0xFF252530)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -170,7 +177,7 @@ class _ParentDashboardState extends State<ParentDashboard> {
             color: Colors.black.withOpacity(0.2),
             blurRadius: 10,
             offset: const Offset(0, 5),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -178,7 +185,8 @@ class _ParentDashboardState extends State<ParentDashboard> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (_isChildLocked ? Colors.redAccent : Colors.greenAccent).withOpacity(0.1),
+              color: (_isChildLocked ? Colors.redAccent : Colors.greenAccent)
+                  .withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
@@ -206,7 +214,9 @@ class _ParentDashboardState extends State<ParentDashboard> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _isChildLocked ? Colors.redAccent : Colors.greenAccent,
+                    color: _isChildLocked
+                        ? Colors.redAccent
+                        : Colors.greenAccent,
                   ),
                 ),
                 if (_childStatus != null) ...[
@@ -231,7 +241,14 @@ class _ParentDashboardState extends State<ParentDashboard> {
         children: [
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AnalyticsScreen(),
+                  ),
+                );
+              },
               icon: const Icon(Icons.bar_chart_rounded, size: 20),
               label: const Text('Report'),
               style: ElevatedButton.styleFrom(
@@ -250,13 +267,22 @@ class _ParentDashboardState extends State<ParentDashboard> {
             flex: 2,
             child: ElevatedButton.icon(
               onPressed: _isConnected ? _toggleChildPhoneLock : null,
-              icon: Icon(_isChildLocked ? Icons.lock_open_rounded : Icons.lock_outline_rounded, size: 20),
+              icon: Icon(
+                _isChildLocked
+                    ? Icons.lock_open_rounded
+                    : Icons.lock_outline_rounded,
+                size: 20,
+              ),
               label: Text(_isChildLocked ? 'Unlock Phone' : 'Lock Phone'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isChildLocked ? Colors.green : const Color(0xFF6C63FF),
+                backgroundColor: _isChildLocked
+                    ? Colors.green
+                    : const Color(0xFF6C63FF),
                 foregroundColor: Colors.white,
                 elevation: 4,
-                shadowColor: _isChildLocked ? Colors.green.withOpacity(0.4) : const Color(0xFF6C63FF).withOpacity(0.4),
+                shadowColor: _isChildLocked
+                    ? Colors.green.withOpacity(0.4)
+                    : const Color(0xFF6C63FF).withOpacity(0.4),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
